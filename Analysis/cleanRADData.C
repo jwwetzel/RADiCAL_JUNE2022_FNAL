@@ -29,6 +29,7 @@ void cleanRADData()
     struct {
         Float_t RAD_x[2][1024];
         Float_t RAD_y[2][2][4][1024];
+        Float_t MCP_y[1024];
         Float_t PbG_y[1024];
 
         Int_t   RAD_triggerno;
@@ -59,12 +60,13 @@ void cleanRADData()
     dataTree->SetBranchAddress("PIX_ySlope",&event.PIX_ySlope); //
     dataTree->SetBranchAddress("PIX_chi2",&event.PIX_chi2); //
     
-    TFile *outFile = new TFile("RAD_Data.root","RECREATE");
+    TFile *outFile = new TFile("RAD_Data_61733-61739.root","RECREATE");
     
     TTree *radTree = new TTree("radTree","radTree");
     radTree->Branch("RAD_x",&newEvent.RAD_x,"RAD_x[2][1024]/F"); //
     radTree->Branch("RAD_y",&newEvent.RAD_y,"RAD_y[2][2][4][1024]/F"); //
-    radTree->Branch("PbG",&newEvent.PbG_y,"PbG[1024]/F");
+    radTree->Branch("PbG_y",&newEvent.PbG_y,"PbG_y[1024]/F");
+    radTree->Branch("MCP_y",&newEvent.MCP_y,"MCP_y[1024]/F");
     radTree->Branch("RAD_triggerno",&newEvent.RAD_triggerno); //
     radTree->Branch("PIX_xIntercept",&newEvent.PIX_xIntercept); //
     radTree->Branch("PIX_yIntercept",&newEvent.PIX_yIntercept); //
@@ -106,7 +108,9 @@ void cleanRADData()
             newEvent.RAD_y[1][1][2][i] = event.RAD_y[1][1][i]; // SW_U_3
             newEvent.RAD_y[1][1][3][i] = event.RAD_y[1][2][i]; // SE_U_4
             
-            newEvent.PbG_y[i] = event.RAD_y[0][0][i]; // PbG
+            newEvent.PbG_y[i]   = event.RAD_y[0][0][i];         // PbG
+            
+            newEvent.MCP_y[i]   = event.BTL_y[1][7][i];         // MCP
         }
         
         newEvent.RAD_triggerno = event.RAD_triggerno;

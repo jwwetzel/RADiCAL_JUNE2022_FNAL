@@ -21,7 +21,7 @@ double GetPedestal(Float_t f_amp[1024], int i_numSamples)
     int sampleCounter = 0;
     for(int i=5; i!=i_numSamples+5; ++i)
     {
-        if (f_amp[i] - d_ped < 6)
+        if (f_amp[i] - d_ped < 5)
         {
             sampleCounter += 1;
             d_newPed+= f_amp[i];

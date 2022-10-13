@@ -3,32 +3,51 @@
 /*Second loop excludes anomalous spikes in signal*/
 /*The pedestal is needed to estimate anomalos spikes*/
 /*The spikes are a 'feature' of CAEN calibration*/
-double GetPedestal(Float_t f_amp[1024], int i_numSamples)
+double GetPedestal(Float_t f_amp[1024], int i_numSamples, double d_rmsValue, TH1F* h_rmsHistNoCut, TH1F* h_rmsHistWithCut)
 {
     double d_ped        =   0.0;
     double d_newPed     =   0.0;
+    float f_rmsCuts     =   0.0;
+    float f_rmsNoCuts   =   0.0;
     
     /*Pedestal value calculation*/
     /*Average the first N timeslices*/
     for(int i=5; i!=i_numSamples+5; ++i)
     {
-        d_ped+= f_amp[i]/float(i_numSamples);
+        d_ped += f_amp[i]/float(i_numSamples);
     }
-    
+
     /*Estimate the pedestal without the janky spikes*/
     /*If 100 samples, but 10 are bad, need to average 90*/
     /*Then sampleCounter keeps track of how many make it*/
-    int sampleCounter = 0;
+    int i_sampleCounter = 0;
     for(int i=5; i!=i_numSamples+5; ++i)
     {
-        if (f_amp[i] - d_ped < 5)
+        if (abs(f_amp[i] - d_ped) < 5)
         {
-            sampleCounter += 1;
-            d_newPed+= f_amp[i];
+            i_sampleCounter += 1;
+            d_newPed += f_amp[i];
         }
     }
     
-    return d_newPed/sampleCounter;
+    d_newPed = d_newPed/i_sampleCounter;
+    i_sampleCounter = 0;
+    for (int i=5; i != i_numSamples+5; ++i)
+    {
+        f_rmsNoCuts  += (f_amp[i]-d_ped)*(f_amp[i]-d_ped);
+        if (abs(f_amp[i] - d_ped) < 5)
+        {
+            f_rmsCuts += (f_amp[i]-d_newPed)*(f_amp[i]-d_newPed);
+            i_sampleCounter+=1;
+        }
+    }
+    
+    h_rmsHistNoCut->Fill(sqrt(f_rmsNoCuts/i_numSamples));
+    h_rmsHistWithCut->Fill(sqrt(f_rmsCuts/i_sampleCounter));
+    
+    d_rmsValue = sqrt(f_rmsCuts/i_sampleCounter);
+    
+    return d_newPed;
 }
 
 /*This estimates the maximum amplitude less the pedestal*/
@@ -102,7 +121,7 @@ void analyzeRADData()
     /* Or RAD_x[1][2]*/
     struct {
         Float_t RAD_x[2][1024];         // RAD_x[down/up][timeslice]
-        Float_t RAD_y[2][2][4][1024];   // RAD_y[high/low][down/up][NW/NE/SW/SE][amplitude]
+        Float_t RAD_y[2][2][4][1024];   // RAD_y[low/high][down/up][NW/NE/SW/SE][amplitude]
         Float_t PbG_y[1024];            // PbG_y[amplitude] lead glass calorimeter
         Float_t MCP_y[1024];            // MCP_y[amplitude]
 
@@ -133,53 +152,42 @@ void analyzeRADData()
     int nev = dataTree->GetEntries();
     
     /* Book the Histograms */
-    TH1F *h_rmsUpHists[4];
-    TH1F *h_rmsDownHists[4];
+    TH1F *h_rmsUpHists[2][2][4];        //[low/high][nocuts/withcuts][ch1234]
+    TH1F *h_rmsDownHists[2][2][4];      //[low][high][nocuts/withcuts][ch1234]
     
     TProfile *tp_Profiles[2][4];
-    TProfile *rms_Profiles[2][2][2][4];
+    TProfile *rms_Profiles[2][2][2][4]; //[low/high][nocuts/withcuts][down/up][channel]
     
     TH1F *pedHists[2][8];
 
     char c_name[50];
     for (int i = 0; i!=4; ++i)
     {
-        sprintf(c_name,"rms_hist_Low_Gain_Downstream_%d",i+1);
-        h_rmsUpHists[i] = new TH1F(c_name,c_name,100,0,5);
+        //Histograms of the root mean squares (RMS) of the pedestal values
+        //RMS = sqrt(sum(sig-ped)^2/numsamples)
+        sprintf(c_name,"rms_hist_Low_Gain_Downstream_%d",i+1);              h_rmsUpHists[0][0][i]   = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_Low_Gain_Upstream_%d",i+1);                h_rmsDownHists[0][0][i] = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_cuts_Low_Gain_Downstream_%d",i+1);         h_rmsUpHists[0][1][i]   = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_cuts_Low_Gain_Upstream_%d",i+1);           h_rmsDownHists[0][1][i] = new TH1F(c_name,c_name,100,0,5);
         
-        sprintf(c_name,"rms_hist_Low_Gain_Upstream_%d",i+1);
-        h_rmsDownHists[i] = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_high_Gain_Downstream_%d",i+1);             h_rmsUpHists[1][0][i]   = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_high_Gain_Upstream_%d",i+1);               h_rmsDownHists[1][0][i] = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_cuts_high_Gain_Downstream_%d",i+1);        h_rmsUpHists[1][1][i]   = new TH1F(c_name,c_name,100,0,5);
+        sprintf(c_name,"rms_hist_cuts_high_Gain_Upstream_%d",i+1);          h_rmsDownHists[1][1][i] = new TH1F(c_name,c_name,100,0,5);
         
-        sprintf(c_name,"tprofile_Low_Gain_Downstream_%d",i+1);
-        tp_Profiles[0][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"tprofile_Low_Gain_Upstream_%d",i+1);
-        tp_Profiles[1][i] = new TProfile(c_name,c_name,1024,0,204.8);
+        //TProfiles aka average waveforms for each channel
+        sprintf(c_name,"tprofile_Low_Gain_Downstream_%d",i+1);              tp_Profiles[0][i] = new TProfile(c_name,c_name,1024,0,204.8);
+        sprintf(c_name,"tprofile_Low_Gain_Upstream_%d",i+1);                tp_Profiles[1][i] = new TProfile(c_name,c_name,1024,0,204.8);
         
         /*TProfiles for waveforms RMS calculation*/
-        sprintf(c_name,"RMS_tprofile_LowCut_LowGain_Downstream_%d",i+1);
-        rms_Profiles[0][0][0][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_LowCut_LowGain_Upstream_%d",i+1);
-        rms_Profiles[0][0][1][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_HighCut_LowGain_Downstream_%d",i+1);
-        rms_Profiles[1][0][0][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_HighCut_LowGain_Upstream_%d",i+1);
-        rms_Profiles[1][0][1][i] = new TProfile(c_name,c_name,1024,0,204.8);
-
-        sprintf(c_name,"RMS_tprofile_LowCut_HighGain_Downstream_%d",i+1);
-        rms_Profiles[0][1][0][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_LowCut_HighGain_Upstream_%d",i+1);
-        rms_Profiles[0][1][1][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_HighCut_HighGain_Downstream_%d",i+1);
-        rms_Profiles[1][1][0][i] = new TProfile(c_name,c_name,1024,0,204.8);
-        
-        sprintf(c_name,"RMS_tprofile_HighCut_HighGain_Upstream_%d",i+1);
-        rms_Profiles[1][1][1][i] = new TProfile(c_name,c_name,1024,0,204.8);
+        sprintf(c_name,"RMS_tprofile_LowCut_LowGain_Downstream_%d",i+1);    rms_Profiles[0][0][0][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_LowCut_LowGain_Upstream_%d",i+1);      rms_Profiles[0][0][1][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_HighCut_LowGain_Downstream_%d",i+1);   rms_Profiles[1][0][0][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_HighCut_LowGain_Upstream_%d",i+1);     rms_Profiles[1][0][1][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_LowCut_HighGain_Downstream_%d",i+1);   rms_Profiles[0][1][0][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_LowCut_HighGain_Upstream_%d",i+1);     rms_Profiles[0][1][1][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_HighCut_HighGain_Downstream_%d",i+1);  rms_Profiles[1][1][0][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
+        sprintf(c_name,"RMS_tprofile_HighCut_HighGain_Upstream_%d",i+1);    rms_Profiles[1][1][1][i] = new TProfile(c_name,c_name,1024,0,204.8);    //[nocuts/withcuts][low/high][down/up][channel]
         
 //
 //        sprintf(c_name,"tprofile_High_Gain_Downstream_%d",i+1);
@@ -212,60 +220,86 @@ void analyzeRADData()
         if (iev%5000 == 1) cout << "Processing event: " << iev << endl;
         dataTree->GetEntry(iev);  // Get the iev'th event
         
-        double d_rmsValue[2][4];    //[Down/Up][NW/NE/SW/SE]
+        double d_rmsValue[2][2][4]; //[Low/High][Down/Up][NW/NE/SW/SE]
         double d_eventPed[2][2][4]; //[Low/High][down/up][NW/NE/SW/SE]
         
         int i_numPedSamples = 100;
 
         for(int i = 0; i!= 4; ++i)
         {
-            d_rmsValue[0][i] = 0.0;
-            d_rmsValue[1][i] = 0.0;
+            d_rmsValue[0][0][i] = 0.0;
+            d_rmsValue[0][1][i] = 0.0;
+            d_rmsValue[1][0][i] = 0.0;
+            d_rmsValue[1][1][i] = 0.0;
             
-            d_eventPed[0][0][i] = GetPedestal(event.RAD_y[0][0][i], i_numPedSamples);
-            d_eventPed[0][1][i] = GetPedestal(event.RAD_y[0][1][i], i_numPedSamples);
-            d_eventPed[1][0][i] = GetPedestal(event.RAD_y[1][0][i], i_numPedSamples);
-            d_eventPed[1][1][i] = GetPedestal(event.RAD_y[1][1][i], i_numPedSamples);
+            d_eventPed[0][0][i] = GetPedestal(event.RAD_y[0][0][i], i_numPedSamples, d_rmsValue[0][0][i], h_rmsDownHists[0][0][i],   h_rmsDownHists[0][1][i]);   // [low][down][i]
+            d_eventPed[0][1][i] = GetPedestal(event.RAD_y[0][1][i], i_numPedSamples, d_rmsValue[0][1][i], h_rmsUpHists[0][0][i],     h_rmsUpHists[0][1][i]);     // [low][up][i]
+            d_eventPed[1][0][i] = GetPedestal(event.RAD_y[1][0][i], i_numPedSamples, d_rmsValue[1][0][i], h_rmsDownHists[1][0][i],   h_rmsDownHists[1][1][i]);   // [high][down][i]
+            d_eventPed[1][1][i] = GetPedestal(event.RAD_y[1][1][i], i_numPedSamples, d_rmsValue[1][1][i], h_rmsUpHists[1][0][i],     h_rmsUpHists[1][1][i]);     // [high][up][i]
             
             int i_numSamples = 100;
             int i_downStreamSampleCounter = 0;
             int i_upStreamSampleCounter = 0;
             
-            for(int j = 5; j != i_numSamples+5; ++j)
+            for (int j = 0; j != 1024; ++j)
             {
-                if( abs(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]) < 5)
-                {
-                    i_downStreamSampleCounter+=1;
-                    d_rmsValue[0][i]+=(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]);
-                }
-                if( abs(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]) < 5)
-                {
-                    i_upStreamSampleCounter+=1;
-                    d_rmsValue[1][i]+=(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i])*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]);
-                }
+//                cout << (-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])) << endl;
+                if (d_rmsValue[0][0][i] < 3) rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][1][i] > 3) rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][0][i] < 3) rms_Profiles[1][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][1][i] > 3) rms_Profiles[1][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][0][i] < 3) rms_Profiles[0][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][1][i] > 3) rms_Profiles[0][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][0][i] < 3) rms_Profiles[1][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][1][i] > 3) rms_Profiles[1][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
             }
+//            for(int j = 5; j != i_numSamples+5; ++j)
+//            {
+//                if( abs(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]) < 5)
+//                {
+//                    i_downStreamSampleCounter+=1;
+//                    d_rmsValue[0][i]+=(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]);
+//                }
+//                if( abs(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]) < 5)
+//                {
+//                    i_upStreamSampleCounter+=1;
+//                    d_rmsValue[1][i]+=(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i])*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]);
+//                }
+//            }
             
-            sampleCounter[i]->Fill(i_downStreamSampleCounter);
+
+//            if (sqrt(d_rmsValue[0][i]/i_downStreamSampleCounter) > 3.)
+//            {
+//                for (int j = 0; j!= 1024; ++j)
+//                {
+//                    rms_Profiles[0][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[low/high][nocuts/withcuts][down/up][channel]
+//                }
+//            }
+//            else
+//            {
+//                for (int j = 0; j!= 1024; ++j)
+//                {
+//                    rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[low/high][nocuts/withcuts][down/up][channel]
+//                }
+//            }
+//
+//
+//            if (sqrt(d_rmsValue[1][i]/i_upStreamSampleCounter) > 3.)
+//            {
+//                for (int j = 0; j!= 1024; ++j)
+//                {
+//                    rms_Profiles[0][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[low/high][nocuts/withcuts][down/up][channel]
+//                }
+//            }
+//            else
+//            {
+//                for (int j = 0; j!= 1024; ++j)
+//                {
+//                    rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[low/high][nocuts/withcuts][down/up][channel]
+//                }
+//            }
             
-            h_rmsUpHists[i]->Fill(sqrt(d_rmsValue[0][i]/i_downStreamSampleCounter));
-            h_rmsDownHists[i]->Fill(sqrt(d_rmsValue[1][i]/i_upStreamSampleCounter));
             
-            if (d_rmsValue[0][i]/i_numSamples > 2.)
-            {
-                for (int j = 0; j!= 1024; ++j)
-                {
-                    rms_Profiles[1][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));
-                    rms_Profiles[1][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));
-                }
-            }
-            else
-            {
-                for (int j = 0; j!= 1024; ++j)
-                {
-                    rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));
-                    rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));
-                }
-            }
             amps[0][i] = GetMaxAmplitude(event.RAD_y[0][0][i]);
             amps[1][i] = GetMaxAmplitude(event.RAD_y[0][1][i]);
             
@@ -390,10 +424,14 @@ void analyzeRADData()
 //        tp_Profiles[0][i]->GetXaxis()->SetTitle("Time (ns)");
         
         outputFile->cd("RMS_Calcs/");
-        h_rmsUpHists[i]->Write();
-        h_rmsDownHists[i]->Write();
-        rms_Profiles[1][0][0][i]->Write();
+        h_rmsUpHists[0][0][i]->Write();
+        h_rmsDownHists[0][0][i]->Write();
+        h_rmsUpHists[0][1][i]->Write();
+        h_rmsDownHists[0][1][i]->Write();
         rms_Profiles[0][0][0][i]->Write();
+        rms_Profiles[0][0][1][i]->Write();
+        rms_Profiles[0][1][0][i]->Write();
+        rms_Profiles[0][1][1][i]->Write();
         
         outputFile->cd("CorrPlots/");
         corrPlots[i]->Write();
@@ -407,23 +445,40 @@ void analyzeRADData()
     TCanvas *rmsCanvas = new TCanvas("rmsCanv","rms Canvas",800,800);
     rmsCanvas->cd();
     
-    int LineColors[8] = {40,30,46,8,9,12,32,49};
+//    int LineColors[8] = {40,30,46,8,9,12,32,49};
+    gStyle->SetPalette(kRust);
+    THStack *rmsCutStack = new THStack("rmsCutStack","RMS Hists Cuts");
+    rmsCutStack->SetMaximum(6000);
     
-    THStack *rmsStack = new THStack("rmsStack","RMS Hists");
+    THStack *rmsNoCutStack = new THStack("rmsNoCutStack","RMS Hists No Cuts");
+    rmsNoCutStack->SetMaximum(6000);
+    
     for (int i = 0; i != 4; ++i)
     {
-        h_rmsUpHists[i]->SetLineColor(LineColors[i]);
-        h_rmsUpHists[i]->SetLineWidth(5);
-        h_rmsDownHists[i]->SetLineColor(LineColors[i+4]);
-        h_rmsDownHists[i]->SetLineWidth(5);
-        rmsStack->Add(h_rmsUpHists[i]);
-        rmsStack->Add(h_rmsDownHists[i]);
+//        h_rmsUpHists[i]->SetLineColor(LineColors[i]);
+        h_rmsUpHists[0][0][i]->SetLineWidth(4);
+        h_rmsUpHists[0][1][i]->SetLineWidth(4);
+//        h_rmsDownHists[i]->SetLineColor(LineColors[i+4]);
+        h_rmsDownHists[0][0][i]->SetLineWidth(4);
+        h_rmsDownHists[0][1][i]->SetLineWidth(4);
+        rmsNoCutStack->Add(h_rmsUpHists[0][0][i]);
+        rmsNoCutStack->Add(h_rmsDownHists[0][0][i]);
+        rmsCutStack->Add(h_rmsUpHists[0][1][i]);
+        rmsCutStack->Add(h_rmsDownHists[0][1][i]);
     }
+    TCanvas *rmsCutCanv = new TCanvas("rmsCutCanv","RMS Cut Canvas", 1600,800);
+    rmsCutCanv->Divide(2,1);
     gPad->SetGrid();
     gPad->SetFrameLineWidth(3);
-    rmsStack->SetTitle("Pedestal RMS for Low Gain Channels;Pedestal RMS (mV);# of Events");
-    rmsStack->Draw("nostack");
-    rmsStack->Write();
+    rmsCutCanv->cd(1);
+    rmsCutStack->SetTitle("Pedestal RMS With Cuts for Low Gain Channels;Pedestal RMS (mV);# of Events");
+    rmsCutStack->Draw("nostack PLC");
+    
+    rmsCutCanv->cd(2);
+    
+    rmsNoCutStack->SetTitle("Pedestal RMS No Cuts for Low Gain Channels;Pedestal RMS (mV);# of Events");
+    rmsNoCutStack->Draw("nostack PLC");
+    rmsCutCanv->Write();
     
     
 //

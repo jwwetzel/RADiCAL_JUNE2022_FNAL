@@ -23,7 +23,7 @@ double GetPedestal(Float_t f_amp[1024], int i_numSamples, double d_rmsValue, TH1
     int i_sampleCounter = 0;
     for(int i=5; i!=i_numSamples+5; ++i)
     {
-        if (abs(f_amp[i] - d_ped) < 5)
+//        if (abs(f_amp[i] - d_ped) < 5)
         {
             i_sampleCounter += 1;
             d_newPed += f_amp[i];
@@ -243,63 +243,21 @@ void analyzeRADData()
             
             for (int j = 0; j != 1024; ++j)
             {
+                if (isnan((-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]))))
+                {
+                    cout << event.RAD_y[0][0][i][j] << " " << d_eventPed[0][0][i] << endl;
+                }
 //                cout << (-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])) << endl;
-                if (d_rmsValue[0][0][i] < 3) rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[0][1][i] > 3) rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[0][0][i] < 3) rms_Profiles[1][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[0][1][i] > 3) rms_Profiles[1][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[1][0][i] < 3) rms_Profiles[0][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[1][1][i] > 3) rms_Profiles[0][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[1][0][i] < 3) rms_Profiles[1][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i]));     //[nocuts/withcuts][low/high][down/up][channel]
-                if (d_rmsValue[1][1][i] > 3) rms_Profiles[1][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i]));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][0][i] < 3) rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][1][i] < 3) rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][0][i] > 3) rms_Profiles[1][0][0][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[0][1][i] > 3) rms_Profiles[1][0][1][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][0][i] < 3) rms_Profiles[0][1][0][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][1][i] < 3) rms_Profiles[0][1][1][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][0][i] > 3) rms_Profiles[1][1][0][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[1][0][i][j]-d_eventPed[1][0][i])));     //[nocuts/withcuts][low/high][down/up][channel]
+                if (d_rmsValue[1][1][i] > 3) rms_Profiles[1][1][1][i]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[1][1][i][j]-d_eventPed[1][1][i])));     //[nocuts/withcuts][low/high][down/up][channel]
             }
-//            for(int j = 5; j != i_numSamples+5; ++j)
-//            {
-//                if( abs(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]) < 5)
-//                {
-//                    i_downStreamSampleCounter+=1;
-//                    d_rmsValue[0][i]+=(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i])*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]);
-//                }
-//                if( abs(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]) < 5)
-//                {
-//                    i_upStreamSampleCounter+=1;
-//                    d_rmsValue[1][i]+=(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i])*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]);
-//                }
-//            }
-            
 
-//            if (sqrt(d_rmsValue[0][i]/i_downStreamSampleCounter) > 3.)
-//            {
-//                for (int j = 0; j!= 1024; ++j)
-//                {
-//                    rms_Profiles[0][1][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[low/high][nocuts/withcuts][down/up][channel]
-//                }
-//            }
-//            else
-//            {
-//                for (int j = 0; j!= 1024; ++j)
-//                {
-//                    rms_Profiles[0][0][0][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][0][i][j]-d_eventPed[0][0][i]));     //[low/high][nocuts/withcuts][down/up][channel]
-//                }
-//            }
-//
-//
-//            if (sqrt(d_rmsValue[1][i]/i_upStreamSampleCounter) > 3.)
-//            {
-//                for (int j = 0; j!= 1024; ++j)
-//                {
-//                    rms_Profiles[0][1][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[low/high][nocuts/withcuts][down/up][channel]
-//                }
-//            }
-//            else
-//            {
-//                for (int j = 0; j!= 1024; ++j)
-//                {
-//                    rms_Profiles[0][0][1][i]->Fill(event.RAD_x[0][j],-1*(event.RAD_y[0][1][i][j]-d_eventPed[0][1][i]));     //[low/high][nocuts/withcuts][down/up][channel]
-//                }
-//            }
-            
-            
             amps[0][i] = GetMaxAmplitude(event.RAD_y[0][0][i]);
             amps[1][i] = GetMaxAmplitude(event.RAD_y[0][1][i]);
             

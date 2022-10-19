@@ -3,7 +3,7 @@
 /*Second loop excludes anomalous spikes in signal*/
 /*The pedestal is needed to estimate anomalos spikes*/
 /*The spikes are a 'feature' of CAEN calibration*/
-double GetPedestal(Float_t f_amp[1024], int i_numSamples, double d_rmsValue, TH1F* h_rmsHistNoCut, TH1F* h_rmsHistWithCut, TH1F* h_pedHist, double d_integral)
+double GetPedestal(Float_t f_amp[1024], int i_numSamples, double d_rmsValue, TH1F* h_rmsHistNoCut, TH1F* h_rmsHistWithCut, TH1F* h_pedHist, double d_integral, double d_pedSubbedAmps)
 {
     double d_ped        =   0.0;
     double d_newPed     =   0.0;
@@ -273,6 +273,7 @@ void analyzeRADData()
         int i_numPedSamples = 100;
         int histCounter = 16;
         int counter = 0;
+        double d_pedSubbedAmps[1024] = {0.};
         
         for(int i = 0; i!= 2; ++i)              //  Low gain / High Gain
         {
@@ -281,23 +282,26 @@ void analyzeRADData()
                 for (int k = 0; k!= 4; ++k)     //  Channel 1 - 4
                 {
                     d_rmsValue[i][j][k] = 0.0;
-                    d_eventPed[i][j][k] = GetPedestal(event.RAD_y[i][j][k], i_numPedSamples, d_rmsValue[i][j][k], h_rmsHists[i][0][j][k],   h_rmsHists[i][1][j][k], pedHists[i][j][k], d_integral[i][j][k]);
+                    d_eventPed[i][j][k] = GetPedestal(event.RAD_y[i][j][k], i_numPedSamples, d_rmsValue[i][j][k], h_rmsHists[i][0][j][k],   h_rmsHists[i][1][j][k], pedHists[i][j][k], d_integral[i][j][k], d_pedSubbedAmps);
+
+                    for (int m = 0; m != 1024; ++m)
+                    {
+                        if (d_rmsValue[i][j][k] < 3) rms_Profiles[0][i][j][k]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[i][j][k][m]-d_eventPed[i][j][k])));     //[nocuts/withcuts][low/high][down/up][channel]
+                        if (d_rmsValue[i][j][k] > 3) rms_Profiles[1][i][j][k]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[i][j][k][m]-d_eventPed[i][j][k])));     //[nocuts/withcuts][low/high][down/up][channel]
+                        d_pedSubbedAmps[m] = -1*(event.RAD_y[i][j][k][m]-d_eventPed[i][j][k]);
+                    }
+                    
                     if (iev < histCounter)
                     {
                         cutCanv[counter][k]->cd(iev+1);
-                        g[iev] = new TGraph(1024,event.RAD_x[0],event.RAD_y[i][j][k]);
+                        g[iev] = new TGraph(1024,event.RAD_x[0],d_pedSubbedAmps);
                         g[iev]->SetMaximum(600);
                         g[iev]->SetMinimum(-600);
                         g[iev]->GetXaxis()->SetTitle("Time (ns)");
                         g[iev]->GetYaxis()->SetTitle("Amplitude (mV)");
                         g[iev]->Draw("AC Same");
                     }
-
-                    for (int m = 0; m != 1024; ++m)
-                    {
-                        if (d_rmsValue[i][j][k] < 3) rms_Profiles[0][i][j][k]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[i][j][k][m]-d_eventPed[i][j][k])));     //[nocuts/withcuts][low/high][down/up][channel]
-                        if (d_rmsValue[i][j][k] > 3) rms_Profiles[1][i][j][k]->Fill(event.RAD_x[0][j],(-1*(event.RAD_y[i][j][k][m]-d_eventPed[i][j][k])));     //[nocuts/withcuts][low/high][down/up][channel]
-                    }
+                    
                     amps[i][j][k] = GetMaxAmplitude(event.RAD_y[i][j][k]);
                 }
                 counter +=1;
